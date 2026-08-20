@@ -48,6 +48,48 @@ describe('resolveDirectoryPickerBackend', () => {
       ...attended, platform: 'linux', linuxChooser: true, env: { DISPLAY: '', WAYLAND_DISPLAY: '' },
     })).toBe('browse')
   })
+
+  it('lets DSH_DIRECTORY_PICKER_BACKEND override every inferred signal', () => {
+    // Forces browse on an otherwise fully native-eligible configuration.
+    expect(resolveDirectoryPickerBackend({
+      ...attended, env: { DSH_DIRECTORY_PICKER_BACKEND: 'browse' },
+    })).toBe('browse')
+    // Forces native even under an all-interfaces bind and an SSH launch,
+    // both of which independently resolve to browse on their own.
+    expect(resolveDirectoryPickerBackend({
+      ...attended,
+      bindHost: '0.0.0.0',
+      env: { DSH_DIRECTORY_PICKER_BACKEND: 'native', SSH_CONNECTION: '10.0.0.2 55 10.0.0.9 22' },
+    })).toBe('native')
+  })
+
+  it('covers the systemd-under-an-SSH-tunnel case the inferred signals cannot see', () => {
+    // A dsh web unit launched by systemd never inherits the operator's
+    // SSH_CONNECTION/SSH_TTY (those exist only in an interactive SSH login
+    // shell's environment), so a stale DISPLAY baked into the unit still
+    // resolves to native without the override.
+    const staleSystemdUnit: DirectoryPickerHostFacts = {
+      bindHost: '127.0.0.1',
+      platform: 'linux',
+      linuxChooser: true,
+      env: { DISPLAY: ':0' },
+    }
+    expect(resolveDirectoryPickerBackend(staleSystemdUnit)).toBe('native')
+    expect(resolveDirectoryPickerBackend({
+      ...staleSystemdUnit,
+      env: { ...staleSystemdUnit.env, DSH_DIRECTORY_PICKER_BACKEND: 'browse' },
+    })).toBe('browse')
+  })
+
+  it('falls through to inference for an unset, blank, or unrecognized override value', () => {
+    expect(resolveDirectoryPickerBackend({ ...attended, env: { DSH_DIRECTORY_PICKER_BACKEND: '' } })).toBe('native')
+    expect(resolveDirectoryPickerBackend({
+      ...attended, env: { DSH_DIRECTORY_PICKER_BACKEND: 'auto' },
+    })).toBe('native')
+    expect(resolveDirectoryPickerBackend({
+      ...attended, bindHost: '0.0.0.0', env: { DSH_DIRECTORY_PICKER_BACKEND: 'Native' },
+    })).toBe('browse')
+  })
 })
 
 let probeRoot: string | undefined
