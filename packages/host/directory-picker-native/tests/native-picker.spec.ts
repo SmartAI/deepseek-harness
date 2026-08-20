@@ -168,6 +168,35 @@ describe('native directory picker', () => {
       .rejects.toThrow('command failed')
   })
 
+  it.each([
+    ['zenity', 'Gtk-WARNING **: cannot open display: :99'],
+    ['zenity', '(zenity:123): Gtk-WARNING **: Failed to connect to socket /run/user/1000/at-spi/bus: No such file or directory'],
+    ['kdialog', 'qt.qpa.xcb: could not connect to display :99'],
+    ['kdialog', 'No protocol specified\nqt.qpa.xcb: could not connect to display :0'],
+  ])('surfaces a %s exit-1 display failure instead of mapping it to cancellation', async (_chooser, stderr) => {
+    const run = vi.fn<DirectoryPickerRunner>(async () => { throw failure(1, stderr) })
+    await expect(pickNativeDirectory(signal(), { platform: 'linux', run }))
+      .rejects.toThrow('command failed')
+  })
+
+  it('surfaces a zenity display failure without falling back to kdialog (only ENOENT falls back)', async () => {
+    const zenityUnreachable = vi.fn<DirectoryPickerRunner>(async () => {
+      throw failure(1, 'Gtk-WARNING **: cannot open display: :99')
+    })
+    await expect(pickNativeDirectory(signal(), { platform: 'linux', run: zenityUnreachable }))
+      .rejects.toThrow('command failed')
+    expect(zenityUnreachable).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces a kdialog display failure after zenity is missing', async () => {
+    const kdialogUnreachable = vi.fn<DirectoryPickerRunner>()
+      .mockRejectedValueOnce(failure('ENOENT'))
+      .mockRejectedValueOnce(failure(1, 'qt.qpa.xcb: could not connect to display :99'))
+    await expect(pickNativeDirectory(signal(), { platform: 'linux', run: kdialogUnreachable }))
+      .rejects.toThrow('command failed')
+    expect(kdialogUnreachable).toHaveBeenCalledTimes(2)
+  })
+
   it('does not convert caller aborts into user cancellation', async () => {
     const abort = new AbortController()
     abort.abort(new Error('closed'))

@@ -40,6 +40,48 @@ function rethrowIfAborted(signal: AbortSignal, error: unknown): void {
 }
 
 /**
+ * Whether a Linux chooser's exit-1 stderr names a display/session failure
+ * (no DISPLAY/WAYLAND_DISPLAY reachable, GTK/Qt init aborted) rather than the
+ * operator dismissing the dialog. Both zenity (GTK) and kdialog (Qt) print
+ * one of these markers to stderr and exit 1 when they cannot open a display;
+ * a genuine cancel leaves stderr empty. Matched loosely (case-insensitive,
+ * substring) because the exact wording varies across GTK/Qt versions and
+ * locales — the alternative (silently mapping this to a cancelled pick) is
+ * strictly worse than an occasional false positive here, since the caller
+ * still surfaces the real stderr in the thrown error either way.
+ */
+/**
+ * Substrings GTK (zenity) and Qt (kdialog) print to stderr when they cannot
+ * reach a display, lowercased for a case-insensitive match. Exact wording
+ * varies by GTK/Qt version and locale, so this stays a marker list rather
+ * than one strict pattern.
+ */
+const DISPLAY_FAILURE_MARKERS = [
+  'cannot open display',
+  'failed to connect to display',
+  'failed to connect to socket',
+  'no protocol specified',
+  'unable to init server',
+  'could not connect to display',
+  'no such display',
+]
+
+function looksLikeDisplayFailure(stderr: string): boolean {
+  const lower = stderr.toLowerCase()
+  return DISPLAY_FAILURE_MARKERS.some(marker => lower.includes(marker))
+}
+
+/**
+ * Map a Linux chooser's exit-1 failure to a cancelled pick, unless stderr
+ * shows the process never reached a display — that case is a broken
+ * environment, not an operator decision, and must surface as an error so the
+ * UI's error surface (not a silent no-op) tells the operator what happened.
+ */
+function isLinuxCancellation(error: unknown): boolean {
+  return errorCode(error) === 1 && !looksLikeDisplayFailure(errorStderr(error))
+}
+
+/**
  * Open the platform directory picker.
  * @param signal - caller/connection lifetime; abort terminates the native command.
  * @param internals - Platform and runner hooks for deterministic tests.
@@ -84,7 +126,7 @@ export async function pickNativeDirectory(
       return outputPath(result.stdout)
     } catch (error: unknown) {
       rethrowIfAborted(signal, error)
-      if (errorCode(error) === 1) return null
+      if (isLinuxCancellation(error)) return null
       if (!isMissingCommand(error)) throw error
     }
 
@@ -95,7 +137,7 @@ export async function pickNativeDirectory(
       return outputPath(result.stdout)
     } catch (error: unknown) {
       rethrowIfAborted(signal, error)
-      if (errorCode(error) === 1) return null
+      if (isLinuxCancellation(error)) return null
       if (isMissingCommand(error)) {
         throw new Error('no supported native directory picker found (install zenity or kdialog)')
       }
