@@ -71,7 +71,11 @@ export const zh = {
   'access.confirm.acknowledge': '我已了解风险，并愿意继续',
   'access.confirm.cancel': '取消',
   'access.confirm.enable': '启用 Full access',
-  'hero.headline': '探索未至之境',
+  // Actual Voice fork override (Ava web GUI): the upstream headline
+  // '探索未至之境' ('Into the Unknown') is DSH's own product copy, not
+  // exposed through a UI slot (see ava-brand's README note) -- overridden
+  // here directly since this checkout is ActualVoice's own DSH fork.
+  'hero.headline': '倾听每一个声音',
   'hero.preview': '预览版',
   'hero.chooseWorkspace': '选择工作区',
   'session.hierarchy': '会话层级',
@@ -248,7 +252,8 @@ export const en = {
   'access.confirm.acknowledge': 'I understand the risks and want to continue',
   'access.confirm.cancel': 'Cancel',
   'access.confirm.enable': 'Enable Full access',
-  'hero.headline': 'Into the Unknown',
+  // Actual Voice fork override (Ava web GUI): see the zh entry's comment.
+  'hero.headline': 'Hear every voice.',
   'hero.preview': 'Preview',
   'hero.chooseWorkspace': 'Choose workspace',
   'session.hierarchy': 'Session hierarchy',
